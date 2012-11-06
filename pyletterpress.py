@@ -199,108 +199,109 @@ class SortedCollection(object):
         raise ValueError('No item found with key above: %r' % (k,))
 
 def evaluator(args):#word, letters, queue, log_queue):
-	word, letters, queue = args
-	common = len([letters.pop(letters.index(x)) for x in word if x in letters])
-	if common == len(word):
-		queue.put(word)
+  word, letters, queue = args
+  common = len([letters.pop(letters.index(x)) for x in word if x in letters])
+  if common == len(word):
+    queue.put(word)
 
-		return word
-	else:
-		return None
+    return word
+  else:
+    return None
 
 def top_words(sorted_set):
-	log = Logger("Top Words")
-	top = []
+  log = Logger("Top Words")
+  top = []
 
-	while True:
-		if(len(sorted_set) > 0):
-			test = list(reversed(sorted_set[-10:]))
-			if 0 in [item in top for item in test]:
-				top = test
+  while True:
+    if(len(sorted_set) > 0):
+      test = list(reversed(sorted_set[-10:]))
+      if 0 in [item in top for item in test]:
+        top = test
 
-				log.info('#1-10 of {}: {}'.format(len(sorted_set), ', '.join(top)))
-		time.sleep(0.01)
+        log.info('#1-10 of {}: {}'.format(len(sorted_set), ', '.join(top)))
+    time.sleep(0.01)
 
 def result_collector(results, best_words):
-	while True:
-		if not results.empty():
-			best_words.insert(results.get())
-		time.sleep(0.01)
+  while True:
+    if not results.empty():
+      best_words.insert(results.get())
+    time.sleep(0.01)
 
 def percent_reporter(complete):
-	while True:
-		log.notice('{:.2f}% complete'.format(complete.get()))
+  while True:
+    if not complete.empty():
+      log.notice('{:.2f}% complete'.format(complete.get()))
 
-		time.sleep(0.01)
+    time.sleep(0.01)
 
 if __name__ == '__main__':
-	log = Logger('Main')
+  log = Logger('Main')
 
-	if len(sys.argv) > 1:
-		letters = sys.argv[1]
+  if len(sys.argv) > 1:
+    letters = sys.argv[1]
 
-		if letters:
-			letters = [x for x in letters]
+    if letters:
+      letters = [x for x in letters]
 
-			log.info('Working with {}'.format(letters))
+      log.info('Working with {}'.format(letters))
 
-			words = set()
+      words = set()
 
-			with open('wordsEn.txt') as dictionary:
-				words = set(word.strip().lower() for word in dictionary if len(word) <= len(letters) and len(word) > 1)
-				
-			log.info('Evaluation against {} words'.format(len(words)))
+      with open('wordsEn.txt') as dictionary:
+        words = set(word.strip().lower() for word in dictionary if len(word) <= len(letters) and len(word) > 1)
 
-			log.info('Sorting words')
-			words = sorted(words, key=lambda word: len(word))
-			#max_length = max(words, key= lambda word: len(word))
+      log.info('Evaluation against {} words'.format(len(words)))
 
-			#log.info('Max word length is {}'.format(max_length))
+      log.info('Sorting words')
+      words = sorted(words, key=lambda word: len(word))
+      #max_length = max(words, key= lambda word: len(word))
 
-			log.info('Creating worker pool')
-			manager = Manager()
-			results = manager.Queue()
-			complete = manager.Queue()
-			pool = Pool()
+      #log.info('Max word length is {}'.format(max_length))
 
-			best_words = SortedCollection(key=lambda word: len(word))
+      log.info('Creating worker pool')
+      manager = Manager()
+      results = manager.Queue()
+      complete = manager.Queue()
+      pool = Pool()
 
-			top_printer = Thread(target=top_words, args=(best_words,))
-			top_printer.daemon = True
-			top_printer.start()
+      best_words = SortedCollection(key=lambda word: len(word))
 
-			collector = Thread(target=result_collector, args=(results, best_words))
-			collector.daemon = True
-			collector.start()
+      top_printer = Thread(target=top_words, args=(best_words,))
+      top_printer.daemon = True
+      top_printer.start()
 
-			reporter = Thread(target=percent_reporter, args=(complete,))
-			reporter.daemon = True
-			reporter.start()
+      collector = Thread(target=result_collector, args=(results, best_words))
+      collector.daemon = True
+      collector.start()
 
-			block_size = 1000
-			for x in xrange(0, len(words), block_size):
-				complete.put(x/len(words) * 100)
-				#log.debug('Items {} through {} contains {} elements'.format(x, x+block_size, len(words[x:x+block_size])))
+      reporter = Thread(target=percent_reporter, args=(complete,))
+      reporter.daemon = True
+      reporter.start()
 
-				pool.map_async(evaluator, [(word, letters, results) for word in words[x:x+block_size]])
+      block_size = 1000
+      for x in xrange(0, len(words), block_size):
+        complete.put(x/len(words) * 100)
+        #log.debug('Items {} through {} contains {} elements'.format(x, x+block_size, len(words[x:x+block_size])))
 
-			#log.info(len([(word, letters, results) for word in words]))
-			#blah = pool.map_async(evaluator, [(word, letters, results) for word in words])
-			#log.info('Done: {}'.format([word for word in blah.get() if word is not None]))
-			pool.close()
+        pool.map_async(evaluator, [(word, letters, results) for word in words[x:x+block_size]])
 
-			done = False
-			try:
-				while not done:
-					if len(best_words) > 1 and results.empty() and complete.empty():
-						done = True
-						
-					time.sleep(0.01)
-			except KeyboardInterrupt:
-				log.warn('Exiting application')
-			
-			pool.terminate()
+      #log.info(len([(word, letters, results) for word in words]))
+      #blah = pool.map_async(evaluator, [(word, letters, results) for word in words])
+      #log.info('Done: {}'.format([word for word in blah.get() if word is not None]))
+      pool.close()
 
-			log.info('Best words: {}'.format(', '.join(reversed(best_words))))
-	else:
-		log.critical('No letters supplied')
+      done = False
+      try:
+        while not done:
+          if len(best_words) > 1 and results.empty() and complete.empty():
+            done = True
+
+          time.sleep(0.01)
+      except KeyboardInterrupt:
+        log.warn('Exiting application')
+
+      pool.terminate()
+
+      log.info('Best words: {}'.format(', '.join(reversed(best_words))))
+  else:
+    log.critical('No letters supplied')
