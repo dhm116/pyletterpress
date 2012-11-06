@@ -3,6 +3,7 @@ import sys, itertools
 from logbook import Logger
 from multiprocessing import Pool, Queue, Process, Manager
 import time
+from datetime import datetime
 from threading import Thread
 from bisect import bisect_left, bisect_right
 
@@ -223,22 +224,37 @@ def top_words(sorted_set):
 
 def result_collector(results, best_words):
   while True:
-    if not results.empty():
-      best_words.insert(results.get())
-    time.sleep(0.01)
+    try:
+      if not results.empty():
+        best_words.insert(results.get())
+    except Exception:
+      pass
+    finally:
+      time.sleep(0.01)
 
 def percent_reporter(complete):
+  log = Logger('Pool Dispatcher')
   while True:
-    if not complete.empty():
-      log.notice('{:.2f}% complete'.format(complete.get()))
-
-    time.sleep(0.01)
+    try:
+      if not complete.empty():
+        log.notice('{:.2f}% complete'.format(complete.get()))
+    except Exception:
+      pass
+    finally:
+      time.sleep(0.01)
 
 if __name__ == '__main__':
   log = Logger('Main')
 
   if len(sys.argv) > 1:
+    start = datetime.now()
+
     letters = sys.argv[1]
+
+    preferred = None
+
+    if len(sys.argv) > 2:
+      preferred = list(sys.argv[2])
 
     if letters:
       letters = [x for x in letters]
@@ -247,7 +263,7 @@ if __name__ == '__main__':
 
       words = set()
 
-      with open('wordsEn.txt') as dictionary:
+      with open('enable.txt') as dictionary:
         words = set(word.strip().lower() for word in dictionary if len(word) <= len(letters) and len(word) > 1)
 
       log.info('Evaluation against {} words'.format(len(words)))
@@ -285,6 +301,7 @@ if __name__ == '__main__':
 
         pool.map_async(evaluator, [(word, letters, results) for word in words[x:x+block_size]])
 
+      complete.put(100)
       #log.info(len([(word, letters, results) for word in words]))
       #blah = pool.map_async(evaluator, [(word, letters, results) for word in words])
       #log.info('Done: {}'.format([word for word in blah.get() if word is not None]))
@@ -302,6 +319,17 @@ if __name__ == '__main__':
 
       pool.terminate()
 
-      log.info('Best words: {}'.format(', '.join(reversed(best_words))))
+      best_words = reversed(best_words)
+
+      if preferred is not None:
+        preferred = list(preferred)
+        log.info('Sorting for words containing {}'.format(', '.join(preferred)))
+        best_words = sorted(best_words, key=lambda word: 1 in [l in preferred for l in word], reverse=True)
+
+      log.info('Best words: {}'.format(', '.join(best_words)))
+
+      end = datetime.now()
+
+      log.info('Took {}s to run'.format(end-start))
   else:
     log.critical('No letters supplied')
