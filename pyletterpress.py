@@ -330,6 +330,6 @@ if __name__ == '__main__':
 
       end = datetime.now()
 
-      log.info('Took {}s to run'.format(end-start))
+      log.info('Took {}s to locate {} words from {} possible'.format(end-start, len(best_words), len(words)))
   else:
     log.critical('No letters supplied')
